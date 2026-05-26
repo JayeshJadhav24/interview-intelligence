@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: interview-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: false
+
+    envVars:
+      # ── Database ────────────────────────────────────────────────────────────
+      - key: DATABASE_URL
+        sync: false            # set in Render dashboard
+
+      # ── Auth ────────────────────────────────────────────────────────────────
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+
+      # ── EPAM Dial API ───────────────────────────────────────────────────────
+      - key: DIAL_API_KEY
+        sync: false
+      - key: DIAL_API_BASE_URL
+        value: https://ai-proxy.lab.epam.com/openai/v1
+      - key: PRIMARY_MODEL
+        value: gpt-4.1-mini-2025-04-14
+      - key: EVAL_MODEL
+        value: gpt-4o
+
+      # ── Backend runtime ─────────────────────────────────────────────────────
+      - key: BACKEND_CORS_ORIGINS
+        sync: false            # set to your Vercel frontend URL in dashboard
+      - key: ENVIRONMENT
+        value: production
+      - key: MAX_UPLOAD_SIZE_BYTES
+        value: "5242880"

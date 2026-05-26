@@ -66,3 +66,30 @@ class QuestionBatch(BaseModel):
 
     questions: list[GeneratedQuestion]
     total_count: int = Field(description="Total number of questions generated")
+
+
+# ── Live interview schemas (Phase 5) ─────────────────────────────────────────
+
+
+class AnswerEvaluation(BaseModel):
+    """
+    LLM evaluation of a single candidate answer.
+    Produced by the evaluate_answer node in the LangGraph interview graph.
+    """
+
+    quality_score: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="0=no answer/wrong, 0.5=partial, 1.0=excellent",
+    )
+    is_bluff_detected: bool = Field(
+        description="True if the answer reveals the claimed skill is exaggerated"
+    )
+    needs_follow_up: bool = Field(
+        description="True if the answer was vague or incomplete and needs probing"
+    )
+    reasoning: str = Field(description="1-2 sentence explanation of the score")
+    follow_up_question: str | None = Field(
+        default=None,
+        description="A follow-up question to ask if needs_follow_up=True",
+    )

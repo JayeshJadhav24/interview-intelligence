@@ -6,11 +6,14 @@ from sqlalchemy import select
 from app.dependencies import CurrentUser, DbDep
 from app.models.question import Question
 from app.schemas.interview import (
+    AnswerCreate,
     QuestionResponse,
     SessionCreate,
     SessionResponse,
     SkillResponse,
+    SubmitAnswerResponse,
 )
+from app.services import answer as answer_service
 from app.services import session as session_service
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -67,3 +70,19 @@ async def list_questions(
     )
     questions = result.scalars().all()
     return [QuestionResponse.model_validate(q) for q in questions]
+
+
+@router.post(
+    "/{session_id}/questions/{question_id}/answer",
+    response_model=SubmitAnswerResponse,
+    status_code=201,
+)
+async def submit_answer(
+    session_id: uuid.UUID,
+    question_id: uuid.UUID,
+    data: AnswerCreate,
+    db: DbDep,
+    current_user: CurrentUser,
+) -> SubmitAnswerResponse:
+    """Submit a candidate's answer. Triggers LangGraph evaluation + optional follow-up."""
+    return await answer_service.submit_answer(db, session_id, question_id, current_user.id, data)

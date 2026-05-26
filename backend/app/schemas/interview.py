@@ -59,6 +59,20 @@ class AnswerResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SubmitAnswerResponse(BaseModel):
+    """Returned when a candidate submits an answer.
+
+    Includes the persisted answer, the LLM evaluation, and — if the
+    LangGraph decided a follow-up is needed — the follow-up question.
+    """
+
+    answer: AnswerResponse
+    quality_score: float
+    is_bluff_detected: bool
+    reasoning: str
+    follow_up_question: QuestionResponse | None = None
+
+
 class EvaluationResponse(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID

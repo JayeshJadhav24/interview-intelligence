@@ -93,3 +93,29 @@ class AnswerEvaluation(BaseModel):
         default=None,
         description="A follow-up question to ask if needs_follow_up=True",
     )
+
+
+# ── Evaluation report schemas (Phase 6) ──────────────────────────────────────
+
+
+class EvaluationReport(BaseModel):
+    """
+    Full session evaluation produced by the evaluator LCEL chain.
+    Uses gpt-4o (eval_model) which has a 128k context window — enough
+    to fit the entire interview transcript in a single prompt.
+    """
+
+    overall_score: float = Field(
+        ge=0.0, le=1.0, description="Weighted aggregate score across all dimensions"
+    )
+    technical_score: float = Field(ge=0.0, le=1.0, description="Depth and accuracy of answers")
+    communication_score: float = Field(
+        ge=0.0, le=1.0, description="Clarity, structure, and articulation"
+    )
+    recommendation: str = Field(description="hire | no_hire | maybe")
+    strengths: str = Field(description="2-3 bullet points on candidate's strongest areas")
+    gaps: str = Field(description="2-3 bullet points on skill gaps or concerns")
+    bluff_summary: str = Field(
+        description="Summary of bluff detections across the session (or 'None detected')"
+    )
+    full_report: str = Field(description="3-5 paragraph narrative hiring manager report")

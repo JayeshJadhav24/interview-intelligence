@@ -34,3 +34,35 @@ class JDAnalysisResult(BaseModel):
     required_skills: list[RoleRequirement]
     key_responsibilities: list[str]
     summary: str
+
+
+# ── Question generation schemas ───────────────────────────────────────────────
+
+
+class GeneratedQuestion(BaseModel):
+    """A single interview question produced by the question generator."""
+
+    text: str = Field(description="The full question text to ask the candidate")
+    skill_name: str | None = Field(
+        default=None,
+        description="The skill this question targets (matches ExtractedSkill.name)",
+    )
+    question_type: str = Field(
+        description=("technical | behavioral | situational | " "verification | follow_up")
+    )
+    difficulty: str = Field(description="easy | medium | hard")
+    rationale: str = Field(description="Why this question was chosen given the resume/JD context")
+
+
+class QuestionBatch(BaseModel):
+    """
+    Ordered list of questions for one interview session.
+
+    Tiers (in order):
+      foundation   — easy, broad coverage of claimed skills
+      depth        — medium, probe top/required skills deeply
+      verification — hard, expose bluff-risk skills
+    """
+
+    questions: list[GeneratedQuestion]
+    total_count: int = Field(description="Total number of questions generated")

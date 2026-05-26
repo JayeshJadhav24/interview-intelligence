@@ -12,7 +12,6 @@ class TestExtractTextFromPdf:
             extract_text_from_pdf(b"not a pdf")
 
     def test_returns_string(self) -> None:
-        # Minimal valid PDF bytes (empty page)
         import fitz
 
         doc = fitz.open()
@@ -25,7 +24,7 @@ class TestExtractTextFromPdf:
 
 class TestParseResumeFromText:
     @pytest.mark.asyncio
-    async def test_calls_llm_and_returns_result(self) -> None:
+    async def test_calls_chain_and_returns_result(self) -> None:
         mock_result = ResumeParseResult(
             candidate_name="Alice",
             skills=[
@@ -38,24 +37,25 @@ class TestParseResumeFromText:
             ],
             summary="Experienced developer",
         )
-        with patch(
-            "ai_pipeline.resume_parser.structured_completion",
-            new=AsyncMock(return_value=mock_result),
-        ):
+        mock_chain = AsyncMock(ainvoke=AsyncMock(return_value=mock_result))
+        with patch("ai_pipeline.resume_parser._get_chain", return_value=mock_chain):
             result = await parse_resume_from_text("Alice has 5 years of Python experience")
-            assert result.candidate_name == "Alice"
-            assert len(result.skills) == 1
-            assert result.skills[0].name == "Python"
+        assert result.candidate_name == "Alice"
+        assert len(result.skills) == 1
+        assert result.skills[0].name == "Python"
 
     @pytest.mark.asyncio
     async def test_truncates_long_resume(self) -> None:
+        """resume_text longer than 12k chars should be capped before being sent."""
         long_text = "x" * 20000
-        captured: list[str] = []
+        captured_kwargs: list[dict] = []
 
-        async def mock_completion(prompt: str, **kwargs: object) -> ResumeParseResult:
-            captured.append(prompt)
+        async def mock_ainvoke(kwargs: dict) -> ResumeParseResult:
+            captured_kwargs.append(kwargs)
             return ResumeParseResult(skills=[], summary="empty")
 
-        with patch("ai_pipeline.resume_parser.structured_completion", new=mock_completion):
+        mock_chain = AsyncMock(ainvoke=mock_ainvoke)
+        with patch("ai_pipeline.resume_parser._get_chain", return_value=mock_chain):
             await parse_resume_from_text(long_text)
-            assert len(captured[0]) < 15000  # truncated
+
+        assert len(captured_kwargs[0]["resume_text"]) <= 12000

@@ -1,9 +1,16 @@
 import uuid
 
 from fastapi import APIRouter, File, Form, UploadFile
+from sqlalchemy import select
 
 from app.dependencies import CurrentUser, DbDep
-from app.schemas.interview import SessionCreate, SessionResponse, SkillResponse
+from app.models.question import Question
+from app.schemas.interview import (
+    QuestionResponse,
+    SessionCreate,
+    SessionResponse,
+    SkillResponse,
+)
 from app.services import session as session_service
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -46,3 +53,17 @@ async def process_session(
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: uuid.UUID, db: DbDep, current_user: CurrentUser) -> None:
     await session_service.delete_session(db, session_id, current_user.id)
+
+
+@router.get("/{session_id}/questions", response_model=list[QuestionResponse])
+async def list_questions(
+    session_id: uuid.UUID, db: DbDep, current_user: CurrentUser
+) -> list[QuestionResponse]:
+    """Return all questions for a session in order_index order."""
+    # Verify ownership first
+    await session_service.get_session(db, session_id, current_user.id)
+    result = await db.execute(
+        select(Question).where(Question.session_id == session_id).order_by(Question.order_index)
+    )
+    questions = result.scalars().all()
+    return [QuestionResponse.model_validate(q) for q in questions]

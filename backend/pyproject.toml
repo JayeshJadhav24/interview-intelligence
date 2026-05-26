@@ -11,7 +11,7 @@ dependencies = [
     "httpx==0.28.0",
     "openai==1.57.0",
     "passlib[bcrypt]==1.7.4",
-    "pydantic==2.10.0",
+    "pydantic[email]==2.10.0",
     "pydantic-settings==2.7.0",
     "pymupdf==1.25.0",
     "python-jose[cryptography]==3.3.0",
@@ -19,11 +19,14 @@ dependencies = [
     "sqlalchemy==2.0.36",
     "tenacity==9.0.0",
     "uvicorn[standard]==0.32.0",
+    "bcrypt==4.2.1",
 ]
 
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.22.1",
     "bandit>=1.9.4",
+    "httpx>=0.28.0",
     "mypy==1.13.0",
     "pre-commit==4.0.1",
     "pytest==8.3.4",
@@ -53,7 +56,9 @@ plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["app", "ai_pipeline"]

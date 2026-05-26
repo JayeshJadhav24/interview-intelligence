@@ -6,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ai_pipeline import jd_analyzer, question_generator, resume_parser
 from app.exceptions import ForbiddenError, NotFoundError
 from app.models.session import InterviewSession, SessionStatus
+from app.repositories.question import QuestionRepository
 from app.repositories.session import SessionRepository
-from app.schemas.interview import SessionCreate, SessionResponse, SkillResponse
+from app.repositories.skill import SkillRepository
+from app.schemas.interview import QuestionResponse, SessionCreate, SessionResponse, SkillResponse
 from app.services.pdf import read_and_validate_pdf
 
 
@@ -66,29 +68,29 @@ async def process_session(
                 }
             )
 
-    # Persist skills via raw ORM (no separate skill repo needed yet)
-    from app.models.skill import Skill  # noqa: PLC0415
-
-    for skill_data in skills_to_create:
-        db.add(Skill(**skill_data))
+    # Persist skills
+    skill_repo = SkillRepository(db)
+    if skills_to_create:
+        await skill_repo.bulk_create(skills_to_create)
 
     # ── Generate questions if we have both resume + JD ────────────────────────
     if parse_result and session.jd_text:
-        from app.models.question import Question  # noqa: PLC0415
-
         jd_result = await jd_analyzer.analyze_jd(session.jd_text)
         question_batch = await question_generator.generate_questions(parse_result, jd_result)
 
-        for idx, q in enumerate(question_batch.questions):
-            db.add(
-                Question(
-                    session_id=session_id,
-                    text=q.text,
-                    question_type=q.question_type,
-                    difficulty=q.difficulty,
-                    order_index=idx,
-                )
-            )
+        question_repo = QuestionRepository(db)
+        await question_repo.bulk_create(
+            [
+                {
+                    "session_id": session_id,
+                    "text": q.text,
+                    "question_type": q.question_type,
+                    "difficulty": q.difficulty,
+                    "order_index": idx,
+                }
+                for idx, q in enumerate(question_batch.questions)
+            ]
+        )
 
     session.status = SessionStatus.IN_PROGRESS
     await db.commit()
@@ -99,6 +101,16 @@ async def process_session(
     if not updated:
         return []
     return [SkillResponse.model_validate(s) for s in updated.skills]
+
+
+async def list_questions(
+    db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID
+) -> list[QuestionResponse]:
+    """Return ordered questions for a session, verifying ownership first."""
+    await get_session(db, session_id, user_id)  # raises 404/403
+    repo = QuestionRepository(db)
+    questions = await repo.get_by_session(session_id)
+    return [QuestionResponse.model_validate(q) for q in questions]
 
 
 async def list_sessions(db: AsyncSession, user_id: uuid.UUID) -> list[SessionResponse]:

@@ -1,12 +1,11 @@
 import uuid
 
 from fastapi import APIRouter, File, Form, UploadFile
-from sqlalchemy import select
 
 from app.dependencies import CurrentUser, DbDep
-from app.models.question import Question
 from app.schemas.interview import (
     AnswerCreate,
+    EvaluationResponse,
     QuestionResponse,
     SessionCreate,
     SessionResponse,
@@ -14,6 +13,7 @@ from app.schemas.interview import (
     SubmitAnswerResponse,
 )
 from app.services import answer as answer_service
+from app.services import evaluation as evaluation_service
 from app.services import session as session_service
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -63,13 +63,7 @@ async def list_questions(
     session_id: uuid.UUID, db: DbDep, current_user: CurrentUser
 ) -> list[QuestionResponse]:
     """Return all questions for a session in order_index order."""
-    # Verify ownership first
-    await session_service.get_session(db, session_id, current_user.id)
-    result = await db.execute(
-        select(Question).where(Question.session_id == session_id).order_by(Question.order_index)
-    )
-    questions = result.scalars().all()
-    return [QuestionResponse.model_validate(q) for q in questions]
+    return await session_service.list_questions(db, session_id, current_user.id)
 
 
 @router.post(
@@ -86,3 +80,19 @@ async def submit_answer(
 ) -> SubmitAnswerResponse:
     """Submit a candidate's answer. Triggers LangGraph evaluation + optional follow-up."""
     return await answer_service.submit_answer(db, session_id, question_id, current_user.id, data)
+
+
+@router.post("/{session_id}/evaluate", response_model=EvaluationResponse, status_code=201)
+async def evaluate_session(
+    session_id: uuid.UUID, db: DbDep, current_user: CurrentUser
+) -> EvaluationResponse:
+    """Generate a hire/no-hire evaluation report for the completed session."""
+    return await evaluation_service.generate_evaluation(db, session_id, current_user.id)
+
+
+@router.get("/{session_id}/evaluation", response_model=EvaluationResponse)
+async def get_evaluation(
+    session_id: uuid.UUID, db: DbDep, current_user: CurrentUser
+) -> EvaluationResponse:
+    """Retrieve the latest evaluation report for a session."""
+    return await evaluation_service.get_evaluation(db, session_id, current_user.id)

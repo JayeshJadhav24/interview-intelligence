@@ -1,41 +1,62 @@
+"""
+Resume parser using a LangChain LCEL chain.
+
+Chain anatomy:
+  ChatPromptTemplate  — fills {resume_text} into the prompt messages
+        |
+  ChatOpenAI (via get_llm())  — calls EPAM Dial, returns an AIMessage
+        |
+  PydanticOutputParser[ResumeParseResult]
+                      — parses the JSON string inside AIMessage.content
+                        and validates it into a typed Pydantic model
+
+The chain is assembled once (_resume_chain) and reused across calls.
+ainvoke() drives the async execution end-to-end.
+"""
+
 import io
 
 import fitz  # PyMuPDF
+from langchain.output_parsers import PydanticOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
-from ai_pipeline.llm_client import structured_completion
+from ai_pipeline.llm_client import get_llm
 from ai_pipeline.schemas import ResumeParseResult
 
-_SYSTEM = """You are an expert technical recruiter and resume analyst.
+_SYSTEM = """\
+You are an expert technical recruiter and resume analyst.
 Extract a structured skill graph from the resume text provided.
-Return valid JSON matching the schema exactly.
-Be conservative with confidence scores — only give 0.9+ if the skill is explicitly
-mentioned with clear evidence. Flag is_bluff_risk=true if a skill is claimed at a
-senior level but the evidence is thin or contradictory."""
+Return valid JSON matching the schema exactly — no markdown fences.
+Be conservative with confidence scores (0.9+ only with clear evidence).
+Flag is_bluff_risk=true if a skill is claimed at senior level but evidence is thin."""
 
-_PROMPT_TEMPLATE = """Analyze this resume and extract all technical and soft skills.
+_HUMAN = """\
+Analyze this resume and extract all technical and soft skills.
 
 Resume text:
 ---
 {resume_text}
 ---
 
-Return JSON with this exact structure:
-{{
-  "candidate_name": "string or null",
-  "total_experience_years": number or null,
-  "skills": [
-    {{
-      "name": "skill name",
-      "category": "backend|frontend|database|devops|cloud|mobile|soft_skill|other",
-      "confidence_score": 0.0-1.0,
-      "years_experience": number or null,
-      "is_bluff_risk": boolean,
-      "evidence": "direct quote or context from resume"
-    }}
-  ],
-  "bluff_risk_flags": ["list of skill names flagged as risky"],
-  "summary": "2-3 sentence professional summary"
-}}"""
+{format_instructions}"""
+
+# ── Parser ────────────────────────────────────────────────────────────────────
+_parser: PydanticOutputParser[ResumeParseResult] = PydanticOutputParser(
+    pydantic_object=ResumeParseResult
+)
+
+_prompt = ChatPromptTemplate.from_messages([("system", _SYSTEM), ("human", _HUMAN)])
+
+# Chain is built lazily on first call so the LLM client (which validates
+# DIAL_API_KEY at instantiation) is not created at import time.
+_resume_chain = None
+
+
+def _get_chain():
+    global _resume_chain
+    if _resume_chain is None:
+        _resume_chain = _prompt | get_llm() | _parser
+    return _resume_chain
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -47,18 +68,14 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 async def parse_resume(pdf_bytes: bytes) -> ResumeParseResult:
     resume_text = extract_text_from_pdf(pdf_bytes)
-    prompt = _PROMPT_TEMPLATE.format(resume_text=resume_text[:12000])  # cap at ~12k chars
-    return await structured_completion(
-        prompt=prompt,
-        system=_SYSTEM,
-        response_schema=ResumeParseResult,
-    )
+    return await parse_resume_from_text(resume_text)
 
 
 async def parse_resume_from_text(resume_text: str) -> ResumeParseResult:
-    prompt = _PROMPT_TEMPLATE.format(resume_text=resume_text[:12000])
-    return await structured_completion(
-        prompt=prompt,
-        system=_SYSTEM,
-        response_schema=ResumeParseResult,
+    """Invoke the LCEL chain asynchronously."""
+    return await _get_chain().ainvoke(
+        {
+            "resume_text": resume_text[:12000],
+            "format_instructions": _parser.get_format_instructions(),
+        }
     )

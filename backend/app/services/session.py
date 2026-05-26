@@ -3,7 +3,7 @@ import uuid
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai_pipeline import resume_parser
+from ai_pipeline import jd_analyzer, question_generator, resume_parser
 from app.exceptions import ForbiddenError, NotFoundError
 from app.models.session import InterviewSession, SessionStatus
 from app.repositories.session import SessionRepository
@@ -40,7 +40,7 @@ async def process_session(
     session_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> list[SkillResponse]:
-    """Run AI pipeline: parse resume + JD, persist skills, update status."""
+    """Run AI pipeline: parse resume + JD → skills + questions, update status."""
     repo = SessionRepository(db)
     session = await repo.get_by_id(session_id)
 
@@ -50,6 +50,7 @@ async def process_session(
         raise ForbiddenError()
 
     skills_to_create: list[dict] = []
+    parse_result = None
 
     if session.resume_text:
         parse_result = await resume_parser.parse_resume_from_text(session.resume_text)
@@ -70,6 +71,24 @@ async def process_session(
 
     for skill_data in skills_to_create:
         db.add(Skill(**skill_data))
+
+    # ── Generate questions if we have both resume + JD ────────────────────────
+    if parse_result and session.jd_text:
+        from app.models.question import Question  # noqa: PLC0415
+
+        jd_result = await jd_analyzer.analyze_jd(session.jd_text)
+        question_batch = await question_generator.generate_questions(parse_result, jd_result)
+
+        for idx, q in enumerate(question_batch.questions):
+            db.add(
+                Question(
+                    session_id=session_id,
+                    text=q.text,
+                    question_type=q.question_type,
+                    difficulty=q.difficulty,
+                    order_index=idx,
+                )
+            )
 
     session.status = SessionStatus.IN_PROGRESS
     await db.commit()

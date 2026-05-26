@@ -60,6 +60,10 @@ Thumbs.db
 volumes/
 uploads/
 
+# ── SQLite test databases ─────────────────────────────────────────────────────
+*.db
+*.sqlite3
+
 # ── Security baseline (no --baseline arg in use) ─────────────────────────────
 .secrets.baseline
 

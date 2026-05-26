@@ -30,7 +30,9 @@ coverage.xml
 htmlcov/
 *.log
 
-
+# ── GitHub Copilot files (local dev only) ─────────────────────────────────────
+.github/prompts/
+.github/copilot-instructions.md
 
 
 # ── Alembic ───────────────────────────────────────────────────────────────────

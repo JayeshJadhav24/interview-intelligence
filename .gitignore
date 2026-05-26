@@ -60,5 +60,8 @@ Thumbs.db
 volumes/
 uploads/
 
+# ── Security baseline (no --baseline arg in use) ─────────────────────────────
+.secrets.baseline
+
 # ── OS ────────────────────────────────────────────────────────────────────────
 desktop.ini

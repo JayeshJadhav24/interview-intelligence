@@ -30,6 +30,10 @@ coverage.xml
 htmlcov/
 *.log
 
+# agents
+.github/
+
+
 # ── Alembic ───────────────────────────────────────────────────────────────────
 # Keep migrations tracked — do NOT ignore alembic/versions/
 

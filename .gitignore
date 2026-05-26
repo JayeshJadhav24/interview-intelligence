@@ -31,7 +31,7 @@ htmlcov/
 *.log
 
 
-
+.github/prompts/
 
 # ── Alembic ───────────────────────────────────────────────────────────────────
 # Keep migrations tracked — do NOT ignore alembic/versions/

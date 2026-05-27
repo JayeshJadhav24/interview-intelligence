@@ -68,5 +68,8 @@ uploads/
 # ── Security baseline (no --baseline arg in use) ─────────────────────────────
 .secrets.baseline
 
+# ── Local test data (not committed) ──────────────────────────────────────────
+examples/
+
 # ── OS ────────────────────────────────────────────────────────────────────────
 desktop.ini

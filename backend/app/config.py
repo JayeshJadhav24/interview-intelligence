@@ -19,13 +19,21 @@ class Settings(BaseSettings):
     # EPAM Dial API
     dial_api_key: str = ""
     dial_api_base_url: str = "https://ai-proxy.lab.epam.com/openai/v1"
+    dial_api_version: str = "2024-02-01"
     primary_model: str = "gpt-4.1-mini-2025-04-14"
     eval_model: str = "gpt-4o"
 
     # Backend
     backend_cors_origins: list[str] = ["http://localhost:3000"]
     environment: str = "development"
+    enable_dev_ai_fallback: bool = False
     max_upload_size_bytes: int = 5_242_880  # 5 MB
+
+    @field_validator("dial_api_key", "dial_api_base_url", mode="before")
+    @classmethod
+    def normalize_string_settings(cls, v: object) -> str:
+        value = v if isinstance(v, str) else str(v)
+        return value.strip().strip('"').strip("'")
 
     @field_validator("backend_cors_origins", mode="before")
     @classmethod

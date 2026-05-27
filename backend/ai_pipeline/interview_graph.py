@@ -71,6 +71,9 @@ Score honestly — reward depth and specific examples, penalise vagueness.
 Return valid JSON matching the schema exactly — no markdown fences."""
 
 _EVAL_HUMAN = """\
+Recent interview context:
+{recent_context}
+
 Question asked: {question}
 Candidate's answer: {answer}
 
@@ -101,8 +104,25 @@ async def evaluate_answer(state: InterviewState) -> dict[str, Any]:
     latest_answer = state["answers"][-1]
     current_q = state["questions"][state["current_index"]]
 
+    history_count = max(0, min(state["current_index"], len(state["evaluations"])))
+    start = max(0, history_count - 3)
+    recent_lines: list[str] = []
+    for i in range(start, history_count):
+        prev_q = state["questions"][i]
+        prev_a = state["answers"][i]
+        prev_e = state["evaluations"][i]
+        recent_lines.append(
+            f"Q{i + 1}: {prev_q['text']}\n"
+            f"A{i + 1}: {prev_a['text']}\n"
+            f"Eval{i + 1}: score={prev_e.get('quality_score')}, "
+            f"bluff={prev_e.get('is_bluff_detected')}, "
+            f"reason={prev_e.get('reasoning')}"
+        )
+    recent_context = "\n\n".join(recent_lines) if recent_lines else "(no prior Q/A context)"
+
     evaluation: AnswerEvaluation = await _get_eval_chain().ainvoke(
         {
+            "recent_context": recent_context,
             "question": current_q["text"],
             "answer": latest_answer["text"],
             "format_instructions": _eval_parser.get_format_instructions(),

@@ -23,3 +23,8 @@ class UnauthorizedError(HTTPException):
 class ForbiddenError(HTTPException):
     def __init__(self, detail: str = "Access denied") -> None:
         super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+class ServiceUnavailableError(HTTPException):
+    def __init__(self, detail: str = "External AI service is currently unavailable") -> None:
+        super().__init__(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)

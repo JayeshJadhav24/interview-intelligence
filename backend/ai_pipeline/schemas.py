@@ -48,7 +48,7 @@ class GeneratedQuestion(BaseModel):
         description="The skill this question targets (matches ExtractedSkill.name)",
     )
     question_type: str = Field(
-        description=("technical | behavioral | situational | " "verification | follow_up")
+        description="conceptual | practical | behavioral | bluff_check | follow_up"
     )
     difficulty: str = Field(description="easy | medium | hard")
     rationale: str = Field(description="Why this question was chosen given the resume/JD context")
@@ -58,10 +58,12 @@ class QuestionBatch(BaseModel):
     """
     Ordered list of questions for one interview session.
 
-    Tiers (in order):
-      foundation   — easy, broad coverage of claimed skills
-      depth        — medium, probe top/required skills deeply
-      verification — hard, expose bluff-risk skills
+        Suggested flow (in order):
+            warm-up       — easy, open-ended, resume-grounded
+            core/deep     — medium/hard technical and practical depth
+            scenario      — practical production problem-solving
+            behavioral    — collaboration, ownership, communication
+            verification  — hard bluff-check validation
     """
 
     questions: list[GeneratedQuestion]

@@ -12,10 +12,11 @@ Key concepts used:
 """
 
 from typing import TypeVar
+from urllib.parse import urlsplit
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+from langchain_openai import AzureChatOpenAI
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -23,19 +24,31 @@ from app.config import get_settings
 
 ResponseT = TypeVar("ResponseT", bound=BaseModel)
 
-_llm: ChatOpenAI | None = None
+_llm: AzureChatOpenAI | None = None
 
 
-def get_llm(model: str | None = None) -> ChatOpenAI:
-    """Return a cached ChatOpenAI instance pointed at EPAM Dial."""
+def _resolve_azure_endpoint(base_url: str) -> str:
+    """Extract scheme+host endpoint required by Azure-compatible OpenAI clients."""
+    parsed = urlsplit(base_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError(
+            "DIAL_API_BASE_URL must be an absolute URL, e.g. https://ai-proxy.lab.epam.com/openai/v1"
+        )
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def get_llm(model: str | None = None) -> AzureChatOpenAI:
+    """Return a cached AzureChatOpenAI instance pointed at EPAM Dial."""
     global _llm
     settings = get_settings()
     chosen_model = model or settings.primary_model
+    azure_endpoint = _resolve_azure_endpoint(settings.dial_api_base_url)
     if _llm is None or _llm.model_name != chosen_model:
-        _llm = ChatOpenAI(
-            model=chosen_model,
+        _llm = AzureChatOpenAI(
+            azure_endpoint=azure_endpoint,
+            deployment_name=chosen_model,
+            openai_api_version=settings.dial_api_version,
             openai_api_key=settings.dial_api_key,  # type: ignore[arg-type]
-            openai_api_base=settings.dial_api_base_url,
             temperature=0.2,
             model_kwargs={"response_format": {"type": "json_object"}},
         )

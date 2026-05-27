@@ -30,11 +30,16 @@ from ai_pipeline.llm_client import get_llm
 from ai_pipeline.schemas import JDAnalysisResult, QuestionBatch, ResumeParseResult
 
 _SYSTEM = """\
-You are a senior technical interviewer preparing for a structured interview.
-Your goal is to generate adaptive questions that:
-1. Verify the candidate truly has the skills they claim
-2. Probe depth on skills required by the role
-3. Expose any potential exaggerations (bluff risks)
+You are a senior technical interviewer preparing for a realistic interview.
+Your goal is to simulate real interviewer flow:
+1. Start broad and resume-grounded (warm-up)
+2. Move into core technical evaluation
+3. Deep-dive into architecture and trade-offs
+4. Add scenario-based problem solving
+5. Include behavioral and bluff-validation checks
+
+Questions must feel connected, progressive, and context-aware.
+Avoid abrupt topic jumps.
 
 Return valid JSON matching the schema exactly — no markdown fences."""
 
@@ -58,13 +63,18 @@ Seniority: {seniority_level}
 Required Skills: {required_skills}
 
 === INSTRUCTIONS ===
-Generate exactly {total_questions} questions in this order:
-- {foundation_count} Foundation questions (easy, question_type=technical, \
-difficulty=easy) — broad skill coverage
-- {depth_count} Depth questions (medium, question_type=technical or situational, \
-difficulty=medium) — focus on required/overlap skills
-- {verification_count} Verification questions (hard, question_type=verification, \
-difficulty=hard) — target bluff risk skills; ask operational "prove it" questions
+Generate exactly {total_questions} questions in this flow order:
+- {foundation_count} Warm-up/Foundation questions (difficulty=easy, question_type=conceptual)
+- {depth_count} Core + Deep technical questions (difficulty=medium or hard,
+  question_type=practical or conceptual)
+- {behavioral_count} Behavioral question (difficulty=medium, question_type=behavioral)
+- {verification_count} Bluff-check questions (difficulty=hard, question_type=bluff_check)
+
+Question type MUST be one of: conceptual | practical | behavioral | bluff_check
+Difficulty MUST be one of: easy | medium | hard
+
+Ensure each later question naturally builds on candidate context
+(resume/JD/projects) rather than being random.
 
 For each question include the skill_name it targets and a brief rationale.
 
@@ -105,20 +115,21 @@ def _build_required_skills(jd: JDAnalysisResult) -> str:
 async def generate_questions(
     resume: ResumeParseResult,
     jd: JDAnalysisResult,
-    foundation_count: int = 4,
-    depth_count: int = 4,
+    foundation_count: int = 2,
+    depth_count: int = 5,
+    behavioral_count: int = 1,
     verification_count: int = 2,
 ) -> QuestionBatch:
     """
     Invoke the LCEL question-generation chain.
 
-    Default: 10 questions total (4 foundation + 4 depth + 2 verification).
+    Default: 10 questions total (2 warm-up + 5 core/deep + 1 behavioral + up to 2 bluff-check).
     Verification count is capped at the number of bluff-risk skills found.
     """
     bluff_risks = resume.bluff_risk_flags or [s.name for s in resume.skills if s.is_bluff_risk]
     # Don't ask more verification questions than there are bluff risks
     verification_count = min(verification_count, len(bluff_risks)) if bluff_risks else 0
-    total = foundation_count + depth_count + verification_count
+    total = foundation_count + depth_count + behavioral_count + verification_count
 
     return await _get_chain().ainvoke(
         {
@@ -133,6 +144,7 @@ async def generate_questions(
             "total_questions": total,
             "foundation_count": foundation_count,
             "depth_count": depth_count,
+            "behavioral_count": behavioral_count,
             "verification_count": verification_count,
             "format_instructions": _parser.get_format_instructions(),
         }
